@@ -8,7 +8,7 @@ from app.main import app
 def mock_db():
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(return_value=MagicMock())
-    with patch("app.db.database.AsyncSessionLocal", return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_session), __aexit__=AsyncMock())):
+    with patch("app.db.database.AsyncSessionLocal", return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_session), __aexit__=AsyncMock(return_value=False))):
         yield mock_session
 
 

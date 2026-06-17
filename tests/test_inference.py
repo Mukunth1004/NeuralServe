@@ -29,7 +29,7 @@ def mock_db():
         "app.db.database.AsyncSessionLocal",
         return_value=AsyncMock(
             __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(),
+            __aexit__=AsyncMock(return_value=False),
         ),
     ):
         yield mock_session
