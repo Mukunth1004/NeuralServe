@@ -1,0 +1,83 @@
+name: CI — Lint, Test & Docker Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neuralserve_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint with ruff
+        run: ruff check app/ tests/ scripts/
+
+      - name: Run tests
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/neuralserve_test
+          USE_ONNX: "false"
+          MODEL_NAME: distilbert-base-uncased-finetuned-sst-2-english
+          LOG_LEVEL: WARNING
+        run: pytest tests/ -v --asyncio-mode=auto
+
+  docker-build:
+    name: Docker Build & Health Check
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t neuralserve:${{ github.sha }} .
+
+      - name: Smoke-test container
+        run: |
+          docker run -d --name neuralserve-test \
+            -e APP_ENV=test \
+            -e DATABASE_URL=sqlite+aiosqlite:///./test.db \
+            -e USE_ONNX=false \
+            -e LOG_LEVEL=WARNING \
+            -p 8000:8000 \
+            neuralserve:${{ github.sha }}
+          echo "Waiting for container to start..."
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:8000/health/live; then
+              echo "Container healthy"
+              break
+            fi
+            sleep 5
+          done
+          curl -f http://localhost:8000/health || exit 1
+          docker stop neuralserve-test
