@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """
 NeuralServe — Fine-tune DistilBERT on SST-2 sentiment dataset.
 Run on Google Colab FREE GPU (T4 / CUDA).
